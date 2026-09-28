@@ -147,7 +147,7 @@ async def process_sse(
     text_cleanup: bool = True,
     edit_title: str = "",
     edit_author: str = "",
-    filename_format: str = "author-title",
+    filename_format: str = "title",
     filename_template: str = "",
 ):
     """SSE endpoint that streams processing progress."""

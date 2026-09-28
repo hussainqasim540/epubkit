@@ -15,7 +15,7 @@ const filenameTemplate = document.getElementById('opt-filename-template');
 
 let uploadedFiles = []; // {task_id, filename, metadata, file_size}
 let selectedDevice = 'x4'; // 'x4' (480x800) or 'x3' (528x792), both 4-level gray
-let selectedFilenameFormat = 'author-title';
+let selectedFilenameFormat = 'title';
 
 // ==================== Upload ====================
 

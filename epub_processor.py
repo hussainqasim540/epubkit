@@ -52,7 +52,7 @@ class ProcessingOptions:
     clean_metadata: bool = True
     text_cleanup: bool = True
     normalize_quotes: bool = True
-    filename_format: str = 'author-title'
+    filename_format: str = 'title'
     filename_template: str = ''
     original_filename: str = ''
     # Metadata edits (applied if non-empty)

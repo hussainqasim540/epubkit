@@ -302,7 +302,7 @@ def strip_store_metadata(opf_tree: etree._ElementTree) -> int:
 def format_filename(
     title: str,
     author: str,
-    filename_format: str = 'author-title',
+    filename_format: str = 'title',
     template: str = '',
     original_filename: str = '',
     year: str = '',
@@ -333,7 +333,7 @@ def format_filename(
     elif filename_format == 'author-title':
         name = _join_filename_parts(author, title)
     elif filename_format == 'title':
-        name = title
+        name = title or author
     else:
         if not template.strip():
             raise ValueError("Custom filename template cannot be empty")
