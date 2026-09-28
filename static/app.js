@@ -15,7 +15,7 @@ const filenameTemplate = document.getElementById('opt-filename-template');
 
 let uploadedFiles = []; // {task_id, filename, metadata, file_size}
 let selectedDevice = 'x4'; // 'x4' (480x800) or 'x3' (528x792), both 4-level gray
-let selectedFilenameFormat = 'title';
+let selectedFilenameFormat = 'short';
 
 // ==================== Upload ====================
 
@@ -257,13 +257,23 @@ async function startProcessing() {
         item.className = 'progress-item';
         item.id = `progress-${file.task_id}`;
         item.innerHTML = `
-            <div class="filename">${escapeHtml(file.filename)}</div>
+            <div class="filename" id="name-${file.task_id}">${escapeHtml(file.filename)}</div>
             <div class="progress-bar-container">
                 <div class="progress-bar" id="bar-${file.task_id}"></div>
             </div>
             <div class="progress-message" id="msg-${file.task_id}">Waiting...</div>
         `;
         progressItems.appendChild(item);
+    }
+
+    // Short names are reduced across the whole batch, so compute them up front
+    if (options.filename_format === 'short') {
+        try {
+            const ids = validFiles.map(f => f.task_id).join(',');
+            await fetch(`/short-names?task_ids=${encodeURIComponent(ids)}`);
+        } catch (err) {
+            // Server falls back to the title for files without a short name
+        }
     }
 
     // Process files sequentially
@@ -276,6 +286,7 @@ async function startProcessing() {
         try {
             const report = await processFile(file.task_id, options, editTitle, editAuthor);
             completedIds.push({ task_id: file.task_id, report });
+            showOutputName(file, report);
         } catch (err) {
             completedIds.push({ task_id: file.task_id, report: { success: false, error: err.message } });
         }
@@ -291,6 +302,15 @@ async function startProcessing() {
             <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
         </svg>
         Optimize EPUBs`;
+}
+
+function showOutputName(file, report) {
+    const nameEl = document.getElementById(`name-${file.task_id}`);
+    if (!nameEl || !report.success || !report.output_filename) return;
+    if (report.output_filename === file.filename) return;
+    nameEl.innerHTML = `
+        ${escapeHtml(report.output_filename)}
+        <div class="filename-original">${escapeHtml(file.filename)}</div>`;
 }
 
 function validateFilenameTemplate() {

@@ -21,6 +21,7 @@ from starlette.requests import Request
 from epub_processor import process_epub, extract_epub_metadata, ProcessingOptions, ProcessingReport
 from image_processor import DEVICE_PROFILES
 from metadata_handler import FILENAME_FORMATS, format_filename
+from epub_renamer import reduce_batch
 
 app = FastAPI(title="epubkit")
 
@@ -132,6 +133,19 @@ async def upload_files(files: list[UploadFile] = File(...)):
     return {"files": results}
 
 
+@app.get("/short-names")
+async def short_names(task_ids: str):
+    """Reduce the filenames of an upload batch together, so the shared series
+    prefix can be detected. Stored on each task for the 'short' filename format."""
+    ids = [t for t in task_ids.split(",") if t in tasks]
+    reduced = reduce_batch([tasks[t]["filename"] for t in ids])
+    names = {}
+    for t in ids:
+        tasks[t]["short_name"] = reduced.get(tasks[t]["filename"]) or ""
+        names[t] = tasks[t]["short_name"]
+    return {"names": names}
+
+
 @app.get("/process/{task_id}")
 async def process_sse(
     task_id: str,
@@ -199,6 +213,7 @@ async def process_sse(
         filename_format=filename_format,
         filename_template=filename_template,
         original_filename=task["filename"],
+        short_name=task.get("short_name") or "",
     )
 
     if edit_title or edit_author:

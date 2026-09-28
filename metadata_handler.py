@@ -34,6 +34,7 @@ FILENAME_FORMATS = {
     'title-author',
     'author-title',
     'title',
+    'short',
     'custom',
 }
 FILENAME_TEMPLATE_FIELDS = {
@@ -309,9 +310,12 @@ def format_filename(
     series: str = '',
     series_index: str = '',
     language: str = '',
+    short_name: str = '',
 ) -> str:
     """
     Create a sanitized EPUB filename using a preset or custom template.
+    'short' uses the batch-reduced name (see epub_renamer.reduce_batch) and
+    falls back to the title when the batch had no clean reduction.
     """
     title = (title or '').strip()
     author = (author or '').strip()
@@ -334,6 +338,8 @@ def format_filename(
         name = _join_filename_parts(author, title)
     elif filename_format == 'title':
         name = title or author
+    elif filename_format == 'short':
+        name = (short_name or '').strip() or title or author
     else:
         if not template.strip():
             raise ValueError("Custom filename template cannot be empty")

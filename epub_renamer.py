@@ -24,7 +24,8 @@ from pathlib import Path
 
 
 BRACKET_RE = re.compile(r"\s*[\[\{\(][^\[\]\{\}\(\)]*[\]\}\)]")
-VOLUME_RE = re.compile(r"\b(?:Volume|Vol\.?|v)\s*(\d+)\b", re.IGNORECASE)
+# Accepts "Volume 3", "Vol. 3", "v3", "Volume-3" and decimal side volumes ("vol 2.1").
+VOLUME_RE = re.compile(r"\b(?:Volume|Vol\.?|v)[\s\-_]*(\d+)(?:\.(\d+))?\b", re.IGNORECASE)
 PART_RE = re.compile(r"\bPart\s*(\d+)\b", re.IGNORECASE)
 # Fallback: a bare trailing number (e.g. "Official Fanbook 4") — only used when
 # no explicit Volume/Vol/v keyword was found. Captures the number and the space
@@ -247,6 +248,7 @@ def reduce_one(
         vol_match = TRAILING_NUMBER_RE.search(work)
     part_num = int(part_match.group(1)) if part_match else None
     vol_num = int(vol_match.group(1)) if vol_match else None
+    vol_decimal = vol_match.group(2) if vol_match and vol_match.re is VOLUME_RE else None
 
     # Remove the matched Part/Volume tokens from the remainder.
     # Remove the later match first so the earlier match's offsets stay valid.
@@ -278,7 +280,7 @@ def reduce_one(
     #    volume -> part -> series-acronym -> remaining subtitle
     parts: list[str] = []
     if vol_num is not None:
-        parts.append(f"v{vol_num:0{vol_pad}d}")
+        parts.append(f"v{vol_num:0{vol_pad}d}" + (f".{vol_decimal}" if vol_decimal else ""))
     if part_num is not None:
         parts.append(f"p{part_num}")
     if series_acronym:
@@ -325,6 +327,9 @@ def reduce_group(files: list[Path]) -> GroupResult:
             t = t[: -len(suffix)]
         stripped.append(t)
     common_phrase = find_common_substring(stripped)
+    # Don't let a shared volume keyword ("... Reincarnation Volume") leak into
+    # the acronym — per-file extraction needs it to find the number.
+    common_phrase = PREFIX_VOL_TAIL_RE.sub("", common_phrase)
     series_acronym = ""
     inline_phrase = ""
     if common_phrase:
@@ -393,3 +398,58 @@ def reduce_paths(paths: list[Path], recursive: bool = False) -> list[GroupResult
         groups.setdefault(f.parent, []).append(f)
 
     return [reduce_group(sorted(group)) for group in groups.values()]
+
+
+def _series_key(stem: str) -> str:
+    """Text before the first Volume/Part token, used to split a mixed batch by series."""
+    work = strip_brackets(stem)
+    matches = [m for m in (VOLUME_RE.search(work), PART_RE.search(work)) if m]
+    if not matches:
+        return ""
+    head = work[: min(m.start() for m in matches)]
+    return MULTI_SPACE_RE.sub(" ", head).strip(" -_:,;.").lower()
+
+
+def reduce_batch(filenames: list[str]) -> dict[str, str | None]:
+    """
+    Reduce a flat batch of EPUB filenames (e.g. one web upload) with no folder
+    structure to group by. Files are grouped by series instead, so a batch
+    mixing two series doesn't lose what tells them apart. Returns a mapping
+    filename -> short name, or None where no clean reduction exists.
+    """
+    groups: dict[str, list[Path]] = {}
+    for name in dict.fromkeys(filenames):
+        path = Path("batch") / name
+        groups.setdefault(_series_key(path.stem), []).append(path)
+
+    result: dict[str, str | None] = {}
+    taken: set[str] = set()
+    for key, files in groups.items():
+        if key:
+            vols = [int(m.group(1)) for f in files if (m := VOLUME_RE.search(f.stem))]
+            vol_pad = max(2, len(str(max(vols)))) if vols else 2
+            proposals = [_reduce_series_volume(f, vol_pad) for f in sorted(files)]
+        else:
+            proposals = reduce_group(sorted(files)).proposals
+        for prop in proposals:
+            ok = prop.status == "ok" and prop.new_name not in taken
+            result[prop.old_path.name] = prop.new_name if ok else None
+            if ok:
+                taken.add(prop.new_name)
+    return result
+
+
+def _reduce_series_volume(path: Path, vol_pad: int) -> RenameProposal:
+    """
+    Use the text before the volume token as the series name, so the acronym
+    is the same whatever else is in the batch (a lone volume has nothing to
+    diff against, and a two-word series would be mistaken for an author).
+    """
+    stem = strip_brackets(path.stem)
+    matches = [m for m in (VOLUME_RE.search(stem), PART_RE.search(stem)) if m]
+    series = stem[: min(m.start() for m in matches)]
+    acronym = make_acronym(series.strip(" -_:,;."))
+    if not 2 <= len(acronym) <= 8:
+        acronym = ""
+    new_stem, status = reduce_one(stem, series, vol_pad=vol_pad, series_acronym=acronym)
+    return RenameProposal(old_path=path, new_name=f"{new_stem}.epub", status=status)

@@ -6,6 +6,13 @@ from metadata_handler import extract_metadata, format_filename
 
 
 class FormatFilenameTests(unittest.TestCase):
+    def test_short_uses_batch_name_and_falls_back_to_title(self):
+        self.assertEqual(
+            format_filename("The Book", "A. Writer", "short", short_name="v03 - TB.epub"),
+            "v03 - TB.epub",
+        )
+        self.assertEqual(format_filename("The Book", "A. Writer", "short"), "The Book.epub")
+
     def test_presets(self):
         self.assertEqual(
             format_filename("The Book", "A. Writer", "original", original_filename="upload.epub"),

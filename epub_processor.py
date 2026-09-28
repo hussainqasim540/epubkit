@@ -55,6 +55,7 @@ class ProcessingOptions:
     filename_format: str = 'title'
     filename_template: str = ''
     original_filename: str = ''
+    short_name: str = ''  # batch-reduced name, used by the 'short' filename format
     # Metadata edits (applied if non-empty)
     metadata_edits: dict = field(default_factory=dict)
 
@@ -423,6 +424,7 @@ def process_epub(input_path: str, output_path: str,
             series=final_metadata['series'],
             series_index=final_metadata['series_index'],
             language=final_metadata['language'],
+            short_name=options.short_name,
         )
 
         # Done
